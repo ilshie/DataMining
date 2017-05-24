@@ -33,7 +33,8 @@ class SOM():
         # if Gaussian neighborhood function
         self.sigma_init = max(J,K)
         self.sigma = self.sigma_init
-        self.sigma_decayfactor = 30
+        self.sigma_decayfactor = 100
+        self.sigma_floor = 0.5
 
     def initialize(self):
         """
@@ -43,14 +44,31 @@ class SOM():
 	and sets M to a (J*K x F) array storing the initialized models.
 	"""
         F = len(self.inputs[0])
-        min_val = np.min(self.inputs)
-        max_val = np.max(self.inputs)
         
+        # create 3D array storing initial models
         np.random.seed(1)
         if self.init=='random':
-            # create 3D array storing initial models
+            min_val = np.min(self.inputs)
+            max_val = np.max(self.inputs)
             self.M = np.random.uniform(min_val, max_val, size=(self.J*self.K, F))
             self.M = np.array(self.M)
+        if self.init=="uniform":
+            min_vals = np.min(self.inputs,axis=0)
+            max_vals = np.max(self.inputs,axis=0)
+
+            # Apply PCA to find 2 principal components
+            # for now just pick 2 components with max sum
+            temp = np.argsort(np.sum(self.inputs,axis=0))
+            index1 = temp[len(temp)-1]
+            index2 = temp[len(temp)-2]
+            stepJ = (max_vals-min_vals)[index1]/self.J
+            stepK = (max_vals-min_vals)[index2]/self.K
+
+            self.M = np.array([[0 for i in range(len(self.inputs[0]))] for j in range (self.J*self.K)])
+            for j in range(self.J):
+                for k in range(self.K):
+                    self.M[j*k][index1] = min_vals[index1] + j * stepJ
+                    self.M[j*k][index2] = min_vals[index2] + k * stepK
 
 		    
     def competitive_step(self):
@@ -124,7 +142,7 @@ class SOM():
             error = self.adaptive_step()
             # reduce sigma over iterations
             if self.neighborhood_func == "gaussian":
-                self.sigma = self.sigma_init * np.exp(-1 * iterations/self.sigma_decayfactor)
+                self.sigma = max(self.sigma_floor, self.sigma_init * np.exp(-1 * iterations/self.sigma_decayfactor))
 
         return self.M
 
